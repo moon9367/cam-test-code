@@ -10,7 +10,7 @@
         "enabled": true,
         "type": "RTSP",
         "value": "rtsp://tspol9983:mms56529983@tspol.iptime.org:8554/stream1",
-        "resolution": "640x360",
+        "resolution": "640x480",
         "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
     },
     {
@@ -79,7 +79,7 @@
     {
         "enabled": true,
         "type": "RTSP",
-        "value": "rtsp://210.99.70.120:1935/live/cctv009.stream",
+        "value": "rtsp://210.99.70.120:1935/live/cctv020.stream",
         "resolution": "640x480",
         "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
     }

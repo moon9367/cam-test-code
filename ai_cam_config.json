@@ -1,0 +1,7 @@
+{
+    "cameras": [],
+    "settings": {
+        "recording_interval": 1800,
+        "max_streams": 12
+    }
+}

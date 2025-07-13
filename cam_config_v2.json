@@ -1,0 +1,125 @@
+{
+    "cameras": [
+        {
+            "name": "cam1",
+            "connection_type": "RTSP 스트림",
+            "rtsp_url": "rtsp://210.99.70.120:1935/live/cctv008.stream",
+            "usb_index": 0,
+            "record_path": "C:/Users/FFG/Desktop/cam-test-code/cam2",
+            "resolution": "1280x720",
+            "fps": 30,
+            "enabled": true
+        },
+        {
+            "name": "cam2",
+            "connection_type": "RTSP 스트림",
+            "rtsp_url": "rtsp://210.99.70.120:1935/live/cctv009.stream",
+            "usb_index": 0,
+            "record_path": "./recordings",
+            "resolution": "1280x720",
+            "fps": 30,
+            "enabled": true
+        },
+        {
+            "name": "cam3",
+            "connection_type": "RTSP 스트림",
+            "rtsp_url": "rtsp://210.99.70.120:1935/live/cctv003.stream",
+            "usb_index": 0,
+            "record_path": "./recordings",
+            "resolution": "1280x720",
+            "fps": 30,
+            "enabled": true
+        },
+        {
+            "name": "cam4",
+            "connection_type": "RTSP 스트림",
+            "rtsp_url": "rtsp://210.99.70.120:1935/live/cctv001.stream",
+            "usb_index": 0,
+            "record_path": "./recordings",
+            "resolution": "1280x720",
+            "fps": 30,
+            "enabled": true
+        },
+        {
+            "name": "cam5",
+            "connection_type": "RTSP 스트림",
+            "rtsp_url": "rtsp://210.99.70.120:1935/live/cctv002.stream",
+            "usb_index": 0,
+            "record_path": "./recordings",
+            "resolution": "1280x720",
+            "fps": 30,
+            "enabled": true
+        },
+        {
+            "name": "cam6",
+            "connection_type": "RTSP 스트림",
+            "rtsp_url": "rtsp://210.99.70.120:1935/live/cctv005.stream",
+            "usb_index": 0,
+            "record_path": "./recordings",
+            "resolution": "1280x720",
+            "fps": 30,
+            "enabled": true
+        },
+        {
+            "name": "cam7",
+            "connection_type": "RTSP 스트림",
+            "rtsp_url": "rtsp://210.99.70.120:1935/live/cctv006.stream",
+            "usb_index": 0,
+            "record_path": "./recordings",
+            "resolution": "1280x720",
+            "fps": 30,
+            "enabled": true
+        },
+        {
+            "name": "cam8",
+            "connection_type": "RTSP 스트림",
+            "rtsp_url": "rtsp://210.99.70.120:1935/live/cctv021.stream",
+            "usb_index": 0,
+            "record_path": "./recordings",
+            "resolution": "1280x720",
+            "fps": 30,
+            "enabled": true
+        },
+        {
+            "name": "cam9",
+            "connection_type": "RTSP 스트림",
+            "rtsp_url": "rtsp://210.99.70.120:1935/live/cctv022.stream",
+            "usb_index": 0,
+            "record_path": "./recordings",
+            "resolution": "1280x720",
+            "fps": 30,
+            "enabled": true
+        },
+        {
+            "name": "cam10",
+            "connection_type": "RTSP 스트림",
+            "rtsp_url": "rtsp://210.99.70.120:1935/live/cctv023.stream",
+            "usb_index": 0,
+            "record_path": "./recordings",
+            "resolution": "1280x720",
+            "fps": 30,
+            "enabled": true
+        },
+        {
+            "name": "cam11",
+            "connection_type": "RTSP 스트림",
+            "rtsp_url": "rtsp://210.99.70.120:1935/live/cctv026.stream",
+            "usb_index": 0,
+            "record_path": "./recordings",
+            "resolution": "1280x720",
+            "fps": 30,
+            "enabled": true
+        },
+        {
+            "name": "cam12",
+            "connection_type": "RTSP 스트림",
+            "rtsp_url": "rtsp://210.99.70.120:1935/live/cctv030.stream",
+            "usb_index": 0,
+            "record_path": "./recordings",
+            "resolution": "1280x720",
+            "fps": 30,
+            "enabled": true
+        }
+    ],
+    "last_saved": "2025-07-14T01:15:01.396346"
+}
