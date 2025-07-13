@@ -1,0 +1,86 @@
+[
+    {
+        "enabled": true,
+        "type": "RTSP",
+        "value": "rtsp://tspol9983:mms56529983@tspol.iptime.org:7554/stream1",
+        "resolution": "640x480",
+        "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
+    },
+    {
+        "enabled": true,
+        "type": "RTSP",
+        "value": "rtsp://tspol9983:mms56529983@tspol.iptime.org:8554/stream1",
+        "resolution": "640x360",
+        "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
+    },
+    {
+        "enabled": true,
+        "type": "RTSP",
+        "value": "rtmp://807e9439d5ca.entrypoint.cloud.wowza.com:1935/app-rC94792j/068b9c9a_stream2",
+        "resolution": "640x480",
+        "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
+    },
+    {
+        "enabled": true,
+        "type": "RTSP",
+        "value": "rtsp://210.99.70.120:1935/live/cctv001.stream",
+        "resolution": "640x480",
+        "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
+    },
+    {
+        "enabled": true,
+        "type": "RTSP",
+        "value": "rtsp://210.99.70.120:1935/live/cctv002.stream",
+        "resolution": "640x480",
+        "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
+    },
+    {
+        "enabled": true,
+        "type": "RTSP",
+        "value": "rtsp://210.99.70.120:1935/live/cctv003.stream",
+        "resolution": "640x480",
+        "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
+    },
+    {
+        "enabled": true,
+        "type": "RTSP",
+        "value": "rtsp://210.99.70.120:1935/live/cctv004.stream",
+        "resolution": "640x480",
+        "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
+    },
+    {
+        "enabled": true,
+        "type": "RTSP",
+        "value": "rtsp://210.99.70.120:1935/live/cctv005.stream",
+        "resolution": "640x480",
+        "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
+    },
+    {
+        "enabled": true,
+        "type": "RTSP",
+        "value": "rtsp://210.99.70.120:1935/live/cctv006.stream",
+        "resolution": "640x480",
+        "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
+    },
+    {
+        "enabled": true,
+        "type": "RTSP",
+        "value": "rtsp://210.99.70.120:1935/live/cctv007.stream",
+        "resolution": "640x480",
+        "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
+    },
+    {
+        "enabled": true,
+        "type": "RTSP",
+        "value": "rtsp://210.99.70.120:1935/live/cctv008.stream",
+        "resolution": "640x480",
+        "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
+    },
+    {
+        "enabled": true,
+        "type": "RTSP",
+        "value": "rtsp://210.99.70.120:1935/live/cctv009.stream",
+        "resolution": "640x480",
+        "record_dir": "C:/Users/FFG/Desktop/cam-test-code/cam"
+    }
+]

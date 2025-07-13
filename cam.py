@@ -8,7 +8,7 @@ from datetime import datetime
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QGridLayout, QSizePolicy, QComboBox, QMessageBox,
-    QDialog, QFormLayout, QFileDialog
+    QDialog, QFormLayout, QFileDialog, QScrollArea, QCheckBox, QGroupBox
 )
 from PyQt5.QtGui import QImage, QPixmap, QIcon
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -27,6 +27,18 @@ AVAILABLE_RESOLUTIONS = [
 
 # TARGET_DISPLAY_WIDTH = 1920  # 고정할 너비
 # TARGET_DISPLAY_HEIGHT = 1080 # 고정할 높이
+
+# 녹화 최적화 설정
+RECORD_QUALITY = 28  # CRF 값을 더 높여서 CPU 사용량 감소
+RECORD_PRESET = "ultrafast"  # 가장 빠른 인코딩으로 CPU 사용량 최소화
+MAX_CONCURRENT_STREAMS = 12  # 고사양 시스템이므로 12개로 증가
+STREAM_RESOLUTION = "640x480"  # 스트리밍용 낮은 해상도
+RECORD_RESOLUTION = "1920x1080"  # 녹화용 높은 해상도
+SEQUENTIAL_CONNECTION_DELAY = 0.5  # 순차 연결 간 지연 시간 (초)
+
+# RTSP 최적화 설정
+RTSP_TCP_OPTIONS = "rtsp_transport;tcp|stimeout;30000000|fflags;nobuffer|flags;low_delay|reorder_queue_size;0|max_delay;0|analyzeduration;2000000|probesize;1000000|max_probe_packets;1000|err_detect;ignore_err|skip_frame;nokey|skip_loop_filter;48|tune;zerolatency"
+RTSP_UDP_OPTIONS = "rtsp_transport;udp|stimeout;30000000|fflags;nobuffer|flags;low_delay|reorder_queue_size;0|max_delay;0|analyzeduration;2000000|probesize;1000000|max_probe_packets;1000|err_detect;ignore_err|skip_frame;nokey|skip_loop_filter;48|tune;zerolatency"
 
 class CameraStream(threading.Thread):
     """
@@ -47,9 +59,25 @@ class CameraStream(threading.Thread):
         self.writer = None
         self.is_recording_active = False
 
+        # 스레드 우선순위를 낮춰서 시스템 부하 감소
+        self.daemon = True
+
+        # 스트리밍과 녹화 해상도 분리
+        self.stream_resolution_str = STREAM_RESOLUTION
+        self.record_resolution_str = RECORD_RESOLUTION
+        
+        # 스트리밍용 해상도 (낮은 해상도)
+        self.stream_width = 640
+        self.stream_height = 480
+        
+        # 녹화용 해상도 (높은 해상도)
+        self.record_width = 1920
+        self.record_height = 1080
+
+        # 기존 호환성을 위한 설정
         self.resolution_str = resolution_str
-        self.desired_width = 1920
-        self.desired_height = 1080
+        self.desired_width = self.stream_width
+        self.desired_height = self.stream_height
 
         # 카메라가 실제로 보고한 최대 해상도 및 FPS를 저장할 변수 (초기값)
         self.actual_max_width = 0
@@ -86,21 +114,35 @@ class CameraStream(threading.Thread):
         if self.writer:
             self.writer.release()
 
-        # 녹화는 사용자가 설정한 해상도로 진행
-        record_width = self.desired_width
-        record_height = self.desired_height
+        # 녹화는 높은 해상도로 진행
+        record_width = self.record_width
+        record_height = self.record_height
         
-        # 녹화 FPS를 30.0으로 강제 고정
-        record_fps = 30.0 
-        print(f"CAM {self.camera_index + 1}: 녹화 FPS를 {record_fps:.2f}로 강제 고정하여 녹화 시작.")
+        # 녹화 FPS를 카메라의 실제 FPS로 설정 (검증 포함)
+        record_fps = self.actual_max_fps if (self.actual_max_fps > 0.1 and self.actual_max_fps <= 60) else 30.0
+        print(f"CAM {self.camera_index + 1}: 녹화 FPS를 {record_fps:.2f}로 설정하여 녹화 시작.")
         
-        filename = datetime.now().strftime("rec_%Y%m%d_%H%M%S.mp4") # 확장자 변경
+        filename = datetime.now().strftime("rec_%Y%m%d_%H%M%S.avi") # AVI 형식으로 변경 (호환성)
         filepath = os.path.join(self.camera_record_dir, filename)
         
-        fourcc = cv2.VideoWriter_fourcc(*'MP4V') # MPEG-4 Video (더 범용적)
-
-        self.writer = cv2.VideoWriter(filepath, fourcc, record_fps, (record_width, record_height))
-        self.last_record_time = time.time()
+        # CPU 최적화를 위한 효율적인 코덱 사용
+        try:
+            # H.264 코덱 시도 (가장 효율적)
+            fourcc = cv2.VideoWriter_fourcc(*'H264')
+            self.writer = cv2.VideoWriter(filepath, fourcc, record_fps, (record_width, record_height))
+            if not self.writer.isOpened():
+                # H.264 실패 시 XVID 코덱 사용 (안정적)
+                fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                self.writer = cv2.VideoWriter(filepath, fourcc, record_fps, (record_width, record_height))
+                if not self.writer.isOpened():
+                    # XVID 실패 시 MJPG 코덱 사용 (호환성 좋음)
+                    fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+                    self.writer = cv2.VideoWriter(filepath, fourcc, record_fps, (record_width, record_height))
+        except Exception as e:
+            print(f"CAM {self.camera_index + 1}: 코덱 설정 오류: {e}")
+            # 기본 코덱 사용
+            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+            self.writer = cv2.VideoWriter(filepath, fourcc, record_fps, (record_width, record_height))
         
         if not self.writer.isOpened():
             print(f"오류: CAM {self.camera_index + 1}: VideoWriter를 열 수 없습니다. 코덱 또는 경로 문제일 수 있습니다. (경로: {filepath}, 해상도: {record_width}x{record_height}, FPS: {record_fps})")
@@ -122,15 +164,16 @@ class CameraStream(threading.Thread):
     def run(self):
         try:
             reconnection_attempts = 0
-            max_reconnection_attempts = 10 # 최대 재시도 횟수
-            reconnection_delay = 2 # 재시도 간 지연 시간 (초)
+            max_reconnection_attempts = 3 # 재시도 횟수를 줄여서 빠르게 포기
+            reconnection_delay = 1 # 재시도 간 지연 시간 단축
 
             while self.running:
                 if not self.cap or not self.cap.isOpened():
                     self.label.setText(f"CAM {self.camera_index + 1}: 연결 끊김, 재연결 시도 중... ({reconnection_attempts}/{max_reconnection_attempts})")
                     
                     if reconnection_attempts >= max_reconnection_attempts:
-                        self.label.setText(f"CAM {self.camera_index + 1}: 연결 실패 (재시도 한도 초과)")
+                        self.label.setText(f"CAM {self.camera_index + 1}: 연결 실패")
+                        self.label.setStyleSheet("border: 0px solid black; background-color: #5a2d2d; color: white;")
                         self.running = False
                         break
                     
@@ -140,34 +183,87 @@ class CameraStream(threading.Thread):
 
                     try: 
                         if self.rtsp_url:
-                            self.cap = cv2.VideoCapture(f"{self.rtsp_url}?buffer_size=3", cv2.CAP_FFMPEG)
-                            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 3) 
+                            # DNS 해석 테스트
+                            import socket
+                            try:
+                                # RTSP URL에서 호스트 추출
+                                if '@' in self.rtsp_url:
+                                    host_part = self.rtsp_url.split('@')[1].split(':')[0]
+                                else:
+                                    host_part = self.rtsp_url.split('://')[1].split(':')[0]
+                                print(f"[DEBUG] DNS 해석 시도: {host_part}")
+                                ip_address = socket.gethostbyname(host_part)
+                                print(f"[DEBUG] DNS 해석 성공: {host_part} -> {ip_address}")
+                            except Exception as e:
+                                print(f"[WARN] DNS 해석 실패: {e}")
+                            
+                            # 1차: TCP로 시도 (H.264 디코딩 강화 옵션 + 프로파일 강제)
+                            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = RTSP_TCP_OPTIONS
+                            print(f"[DEBUG] RTSP 연결 시도(TCP): {self.rtsp_url}")
+                            self.cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
+                            if not self.cap.isOpened():
+                                print("[WARN] TCP 연결 실패, UDP로 재시도")
+                                # 2차: UDP로 재시도 (H.264 디코딩 강화 옵션 + 프로파일 강제)
+                                os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = RTSP_UDP_OPTIONS
+                                print(f"[DEBUG] RTSP 연결 시도(UDP): {self.rtsp_url}")
+                                self.cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
+                                if not self.cap.isOpened():
+                                    print("[ERROR] UDP 연결도 실패!")
+                                    try:
+                                        import subprocess
+                                        result = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
+                                        print("[DEBUG] ffmpeg version info:\n", result.stdout)
+                                        # RTSP 스트림 정보 확인 시도
+                                        print("[DEBUG] RTSP 스트림 정보 확인 시도...")
+                                        probe_result = subprocess.run([
+                                            "ffprobe", "-v", "quiet", "-print_format", "json", 
+                                            "-show_streams", "-rtsp_transport", "tcp",
+                                            self.rtsp_url
+                                        ], capture_output=True, text=True, timeout=10)
+                                        if probe_result.returncode == 0:
+                                            print("[DEBUG] RTSP 스트림 정보:", probe_result.stdout)
+                                        else:
+                                            print("[DEBUG] RTSP 스트림 정보 확인 실패:", probe_result.stderr)
+                                    except Exception as e:
+                                        print("[ERROR] 진단 정보 확인 실패:", e)
                         elif isinstance(self.camera_identifier, int):
                             self.cap = cv2.VideoCapture(self.camera_identifier, cv2.CAP_DSHOW)
                             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 3)
                         
                         start_time = time.time()
                         while not self.cap.isOpened():
-                            if time.time() - start_time > 15: 
+                            if time.time() - start_time > 30:  # 타임아웃을 30초로 연장
                                 raise Exception("카메라 연결 시간 초과")
                             time.sleep(0.5)
 
+                        # 최대 해상도와 FPS 요청
                         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 9999) 
                         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 9999)
-                        self.cap.set(cv2.CAP_PROP_FPS, 9999) 
+                        self.cap.set(cv2.CAP_PROP_FPS, 30)  # 30fps로 설정
+                        
+                        # 실제 값 읽기
                         self.actual_max_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                         self.actual_max_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         self.actual_max_fps = self.cap.get(cv2.CAP_PROP_FPS)
-                        if self.actual_max_fps <= 0.1: self.actual_max_fps = 30.0 
+                        
+                        # FPS 값 검증 및 수정
+                        if self.actual_max_fps <= 0.1 or self.actual_max_fps > 60:
+                            self.actual_max_fps = 30.0
+                            print(f"CAM {self.camera_index + 1}: FPS 값이 비정상({self.actual_max_fps}), 30fps로 설정") 
 
-                        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.desired_width)
-                        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.desired_height)
-                        self.cap.set(cv2.CAP_PROP_FPS, 30.0) 
+                        # 카메라가 지원하는 최대 해상도와 FPS로 설정
+                        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.actual_max_width)
+                        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.actual_max_height)
+                        self.cap.set(cv2.CAP_PROP_FPS, self.actual_max_fps)
                         
                         self.current_capture_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                         self.current_capture_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         self.current_capture_fps = self.cap.get(cv2.CAP_PROP_FPS) 
-                        if self.current_capture_fps <= 0.1: self.current_capture_fps = 30.0
+                        
+                        # 현재 FPS 값 검증 및 수정
+                        if self.current_capture_fps <= 0.1 or self.current_capture_fps > 60:
+                            self.current_capture_fps = self.actual_max_fps
+                            print(f"CAM {self.camera_index + 1}: 현재 FPS 값이 비정상({self.current_capture_fps}), {self.actual_max_fps}fps로 설정")
 
                         print(f"CAM {self.camera_index + 1}: 재연결 성공. 실제 캡처: {self.current_capture_width}x{self.current_capture_height} @ {self.current_capture_fps:.2f}fps (요청: {self.desired_width}x{self.desired_height})")
                         reconnection_attempts = 0
@@ -178,16 +274,22 @@ class CameraStream(threading.Thread):
                         time.sleep(reconnection_delay)
                     continue
                 
-                ret, frame = self.cap.read() 
-                
-                if not ret or frame is None:
-                    self.label.setText(f"CAM {self.camera_index + 1}: 프레임 획득 실패")
-                    if ret:
-                        time.sleep(0.01)
-                    else:
-                        print(f"CAM {self.camera_index + 1}: 프레임 획득 실패, 재연결 시도 필요.")
-                        self.cap.release()
-                        self.cap = None 
+                try:
+                    ret, frame = self.cap.read() 
+                    
+                    if not ret or frame is None:
+                        self.label.setText(f"CAM {self.camera_index + 1}: 프레임 획득 실패")
+                        if ret:
+                            time.sleep(0.01)
+                        else:
+                            print(f"CAM {self.camera_index + 1}: 프레임 획득 실패, 재연결 시도 필요.")
+                            self.cap.release()
+                            self.cap = None 
+                        continue
+                except Exception as e:
+                    print(f"CAM {self.camera_index + 1}: 프레임 읽기 오류: {e}")
+                    self.label.setText(f"CAM {self.camera_index + 1}: 읽기 오류")
+                    time.sleep(0.1)
                     continue
                 
                 h_frame, w_frame, _ = frame.shape 
@@ -215,31 +317,21 @@ class CameraStream(threading.Thread):
                     now = time.time()
                     if self.writer is None or (now - self.last_record_time > RECORD_INTERVAL):
                         self.start_recording_segment()
+                        self.last_record_time = now  # 세그먼트 시작 시간 기록
                     
                     if self.writer and frame is not None:
-                        original_rec_aspect = w_frame / h_frame
-                        target_rec_width = self.desired_width
-                        target_rec_height = int(target_rec_width / original_rec_aspect)
-
-                        if target_rec_height > self.desired_height:
-                            target_rec_height = self.desired_height
-                            target_rec_width = int(target_rec_height * original_rec_aspect)
-
-                        if target_rec_width <= 0 or target_rec_height <= 0:
-                            target_rec_width = 1920
-                            target_rec_height = 1080
-                            
-                        resized_frame_for_recording = cv2.resize(frame, (target_rec_width, target_rec_height), interpolation=cv2.INTER_AREA)
-                        
-                        if resized_frame_for_recording.shape[1] != self.desired_width or resized_frame_for_recording.shape[0] != self.desired_height:
-                            resized_frame_for_recording = cv2.resize(resized_frame_for_recording, (self.desired_width, self.desired_height), interpolation=cv2.INTER_LINEAR)
+                        # 녹화용 해상도로 리사이징 (최적화)
+                        if frame.shape[1] != self.record_width or frame.shape[0] != self.record_height:
+                            resized_frame_for_recording = cv2.resize(frame, (self.record_width, self.record_height), interpolation=cv2.INTER_LINEAR)
+                        else:
+                            resized_frame_for_recording = frame
 
                         self.writer.write(resized_frame_for_recording)
                 elif not self.is_recording_active and self.writer is not None:
                     self.stop_recording_segment()
 
                 current_time = time.time()
-                display_interval = 1.0 / 30.0
+                display_interval = 1.0 / self.current_capture_fps if self.current_capture_fps > 0.1 else 1.0 / 30.0
 
                 if (current_time - self.last_display_time) > display_interval:
                     # 라벨의 크기가 아니라, 1920x1080 비율을 목표로 합니다.
@@ -342,12 +434,33 @@ class SettingsDialog(QDialog):
     def __init__(self, parent, cam_sources, camera_capabilities):
         super().__init__(parent)
         self.setWindowTitle("카메라 설정")
+        self.setGeometry(100, 100, 800, 600)  # 창 크기 확대
         self.cam_sources = cam_sources
         self.camera_capabilities = camera_capabilities
-        layout = QFormLayout()
+        
+        # 메인 레이아웃
+        main_layout = QVBoxLayout()
+        
+        # 스크롤 영역 생성
+        scroll_area = QScrollArea()
+        scroll_widget = QWidget()
+        scroll_layout = QVBoxLayout()
+        
         self.inputs = [] 
 
-        for i in range(6):
+        # 카메라 설정을 3x4 그리드로 배치
+        camera_grid = QGridLayout()
+        
+        for i in range(12):
+            # 카메라 그룹 박스 생성
+            group_box = QGroupBox(f"CAM {i+1}")
+            group_layout = QFormLayout()
+            
+            # 비활성화 체크박스
+            enable_checkbox = QCheckBox("활성화")
+            enable_checkbox.setChecked(True)
+            group_layout.addRow("상태", enable_checkbox)
+            
             type_combo = QComboBox()
             type_combo.addItems(["USB", "RTSP"])
             
@@ -388,30 +501,60 @@ class SettingsDialog(QDialog):
             
             fps_label = QLabel(f"최대 FPS: {max_fps:.2f}")
             
-            layout.addRow(f"CAM{i+1} 유형", type_combo)
-            layout.addRow(f"CAM{i+1} 입력값", value_edit)
+            group_layout.addRow("유형", type_combo)
+            group_layout.addRow("입력값", value_edit)
             
             res_fps_layout = QHBoxLayout()
             res_fps_layout.addWidget(resolution_combo)
             res_fps_layout.addWidget(fps_label)
             res_fps_layout.addStretch(1) 
 
-            layout.addRow(f"CAM{i+1} 해상도", res_fps_layout)
-            self.inputs.append((type_combo, value_edit, resolution_combo, fps_label))
+            group_layout.addRow("해상도", res_fps_layout)
+            
+            group_box.setLayout(group_layout)
+            
+            # 3x4 그리드에 배치
+            row, col = divmod(i, 4)  # 4열, 3행
+            camera_grid.addWidget(group_box, row, col)
+            
+            self.inputs.append((enable_checkbox, type_combo, value_edit, resolution_combo, fps_label))
 
+        scroll_layout.addLayout(camera_grid)
+        
+        # 녹화 설정
+        record_group = QGroupBox("녹화 설정")
+        record_layout = QFormLayout()
+        
         self.record_path_edit = QLineEdit()
         record_path_btn = QPushButton("녹화 폴더 선택")
         record_path_btn.clicked.connect(self.select_record_dir)
-        layout.addRow("녹화 저장 경로", self.record_path_edit)
-        layout.addRow(record_path_btn)
-
+        record_layout.addRow("녹화 저장 경로", self.record_path_edit)
+        record_layout.addRow(record_path_btn)
+        
+        record_group.setLayout(record_layout)
+        scroll_layout.addWidget(record_group)
+        
+        # 버튼들
+        button_layout = QHBoxLayout()
         save_btn = QPushButton("설정 저장")
         save_btn.clicked.connect(self.accept)
-        layout.addRow(save_btn)
-        self.setLayout(layout)
+        cancel_btn = QPushButton("취소")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(save_btn)
+        button_layout.addWidget(cancel_btn)
+        scroll_layout.addLayout(button_layout)
+        
+        scroll_widget.setLayout(scroll_layout)
+        scroll_area.setWidget(scroll_widget)
+        scroll_area.setWidgetResizable(True)
+        
+        main_layout.addWidget(scroll_area)
+        self.setLayout(main_layout)
 
-        for i, (type_combo, value_edit, resolution_combo, _) in enumerate(self.inputs):
+        # 기존 설정 로드
+        for i, (enable_checkbox, type_combo, value_edit, resolution_combo, _) in enumerate(self.inputs):
             try:
+                enable_checkbox.setChecked(self.cam_sources[i].get("enabled", True))
                 type_combo.setCurrentText(self.cam_sources[i].get("type", "USB"))
                 value_edit.setText(self.cam_sources[i].get("value", str(i)))
                 
@@ -424,6 +567,7 @@ class SettingsDialog(QDialog):
                     else:
                         resolution_combo.setCurrentText("640x480") 
             except IndexError:
+                enable_checkbox.setChecked(True)
                 type_combo.setCurrentText("USB")
                 value_edit.setText(str(i))
                 if resolution_combo.count() > 0:
@@ -444,8 +588,9 @@ class SettingsDialog(QDialog):
     def get_settings(self):
         result = []
         global_record_dir = self.record_path_edit.text().strip()
-        for type_combo, value_edit, resolution_combo, _ in self.inputs:
+        for enable_checkbox, type_combo, value_edit, resolution_combo, _ in self.inputs:
             result.append({
+                "enabled": enable_checkbox.isChecked(),
                 "type": type_combo.currentText(),
                 "value": value_edit.text().strip(),
                 "resolution": resolution_combo.currentText(),
@@ -466,7 +611,7 @@ class MultiCamViewer(QWidget):
         self.is_global_recording_active = False
 
         self.cam_sources = self.load_rtsp_config()
-        self.camera_capabilities = [{'max_width': 0, 'max_height': 0, 'max_fps': 0.0} for _ in range(6)]
+        self.camera_capabilities = [{'max_width': 0, 'max_height': 0, 'max_fps': 0.0} for _ in range(12)]
 
 
         self.start_streaming_button = QPushButton("스트리밍 시작")
@@ -506,14 +651,14 @@ class MultiCamViewer(QWidget):
         self.grid_container.setLayout(self.grid_layout)
         self.grid_container.setStyleSheet("background-color: black;")
 
-        for i in range(6):
+        for i in range(12):
             label = QLabel(f"Camera {i + 1}\n신호 없음")
             label.setStyleSheet("border: 0px solid black; background-color: black; color: white;")
             label.setAlignment(Qt.AlignCenter)
             label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             label.mouseDoubleClickEvent = self.make_double_double_click_handler(label, i)
             self.labels.append(label)
-            row, col = divmod(i, 3)
+            row, col = divmod(i, 4)  # 4x3 그리드로 변경 (4열, 3행)
             self.grid_layout.addWidget(label, row, col, 1, 1)
 
         main_layout.addWidget(self.grid_container)
@@ -524,13 +669,13 @@ class MultiCamViewer(QWidget):
             try:
                 with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                     config = json.load(f)
-                    if len(config) == 6:
+                    if len(config) == 12: # 12개 카메라 설정 확인
                         return config
                     else:
                         print("설정 파일의 항목 수가 올바르지 않습니다. 기본 설정을 사용합니다.")
             except Exception as e:
                 print(f"설정 로드 실패: {e}")
-        return [{"type": "USB", "value": str(i), "resolution": "1920x1080", "record_dir": ""} for i in range(6)]
+        return [{"type": "USB", "value": str(i), "resolution": "1920x1080", "record_dir": "", "enabled": True} for i in range(12)]
 
     def save_rtsp_config(self):
         try:
@@ -571,13 +716,25 @@ class MultiCamViewer(QWidget):
             label.setText(f"Camera {i + 1}\n연결 중...")
             label.setStyleSheet("border: 0px solid black; background-color: black; color: white;")
 
-        self.camera_capabilities = [{'max_width': 0, 'max_height': 0, 'max_fps': 0.0} for _ in range(6)]
+        self.camera_capabilities = [{'max_width': 0, 'max_height': 0, 'max_fps': 0.0} for _ in range(12)]
 
-        for i, cam in enumerate(self.cam_sources):
+        # 1번부터 차례대로 순차적 연결
+        for i in range(12):  # 1번부터 12번까지 순서대로
+            if i >= len(self.cam_sources):
+                break
+                
+            cam = self.cam_sources[i]
+            enabled = cam.get("enabled", True)
+            
+            # 비활성화된 카메라는 건너뛰기
+            if not enabled:
+                self.labels[i].setText(f"Camera {i + 1}\n비활성화")
+                self.labels[i].setStyleSheet("border: 0px solid black; background-color: #404040; color: white;")
+                continue
             cam_type = cam.get("type")
             val = cam.get("value")
             record_base_dir = cam.get("record_dir")
-            resolution_str = cam.get("resolution", "1920x1080")
+            resolution_str = cam.get("resolution", STREAM_RESOLUTION)  # 스트리밍용 낮은 해상도 사용
 
             stream = None
             if cam_type == "USB":
@@ -602,8 +759,21 @@ class MultiCamViewer(QWidget):
 
             self.streams.append(stream)
             stream.start()
-
-        time.sleep(2) 
+            
+            # 현재 연결 중인 카메라 표시
+            self.labels[i].setText(f"Camera {i + 1}\n연결 중...")
+            self.labels[i].setStyleSheet("border: 0px solid black; background-color: #4a4a4a; color: white;")
+            
+            # 순차 연결을 위한 지연 (RTSP 연결 안정화)
+            time.sleep(SEQUENTIAL_CONNECTION_DELAY)
+            
+            # 연결 상태 확인 및 UI 업데이트 (부드러운 색상)
+            if stream.is_alive():
+                self.labels[i].setText(f"Camera {i + 1}\n연결됨")
+                self.labels[i].setStyleSheet("border: 0px solid black; background-color: #2d5a2d; color: white;")
+            else:
+                self.labels[i].setText(f"Camera {i + 1}\n연결 실패")
+                self.labels[i].setStyleSheet("border: 0px solid black; background-color: #5a2d2d; color: white;") 
 
         for i, stream in enumerate(self.streams):
             if stream.is_alive() and stream.cap and stream.cap.isOpened():
@@ -685,7 +855,7 @@ class MultiCamViewer(QWidget):
                         item.widget().setParent(None)
 
                 for i, cam_label in enumerate(self.labels):
-                    row, col = divmod(i, 3)
+                    row, col = divmod(i, 4)  # 4x3 그리드로 변경 (4열, 3행)
                     self.grid_layout.addWidget(cam_label, row, col, 1, 1)
 
                 self.grid_layout.update()
