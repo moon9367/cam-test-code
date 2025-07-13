@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QImage, QPixmap, QIcon
 from PyQt5.QtCore import Qt, pyqtSignal
 
-# Configuration file for saving camera settings
+# Configuration file for saving camera settings33
 CONFIG_FILE = "rtsp_config.json"
 # Maximum size for QWidget, used for expanding labels
 QWIDGETSIZE_MAX = 16777215
